@@ -1,10 +1,11 @@
 {
   "name": "@brakebein/nest-neo4j",
-  "version": "0.1.4",
+  "version": "1.0.0",
   "description": "Neo4j integration for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.js",
   "scripts": {
+    "prebuild": "rimraf ./dist",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,7 +13,12 @@
     "type": "git",
     "url": "git+https://github.com/Brakebein/nest-neo4j.git"
   },
-  "keywords": ["neo4j", "cypher", "nest", "nestjs"],
+  "keywords": [
+    "neo4j",
+    "cypher",
+    "nest",
+    "nestjs"
+  ],
   "author": {
     "name": "Adam Cowley",
     "url": "https://github.com/adam-cowley"
@@ -45,7 +51,11 @@
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.2.1",
     "prettier": "^2.7.1",
+    "rimraf": "^3.0.2",
     "ts-node": "^10.0.0",
     "typescript": "^4.3.5"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }
