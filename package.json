@@ -13,8 +13,17 @@
     "url": "git+https://github.com/Brakebein/nest-neo4j.git"
   },
   "keywords": ["neo4j", "cypher", "nest", "nestjs"],
-  "author": "",
-  "license": "ISC",
+  "author": {
+    "name": "Adam Cowley",
+    "url": "https://github.com/adam-cowley"
+  },
+  "contributors": [
+    {
+      "name": "Brakebein",
+      "url": "https://github.com/Brakebein"
+    }
+  ],
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/Brakebein/nest-neo4j/issues"
   },
