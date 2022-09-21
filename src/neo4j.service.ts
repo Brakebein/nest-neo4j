@@ -11,6 +11,7 @@ import neo4j, {
   isLocalTime,
   isPoint,
   isTime,
+  QueryResult,
 } from 'neo4j-driver';
 import { Neo4jConfig } from './interfaces/neo4j-config.interface';
 import { NEO4J_OPTIONS, NEO4J_DRIVER } from './neo4j.constants';
@@ -36,7 +37,7 @@ export class Neo4jService implements OnApplicationShutdown {
   }
 
   getConfig(): Neo4jConfig {
-    return this.config;
+    return { ...this.config };
   }
 
   onApplicationShutdown(): Promise<void> {
@@ -64,20 +65,48 @@ export class Neo4jService implements OnApplicationShutdown {
   }
 
   /**
-   * READ transaction without modifying database.
+   * READ transaction without modifying database and return raw query result.
+   */
+  async readRaw(
+    cypher: string,
+    params?: Record<string, any>,
+    database?: string,
+  ): Promise<QueryResult> {
+    const session = this.getReadSession(database);
+
+    try {
+      return session.readTransaction((tx) => tx.run(cypher, params));
+    } catch (e) {
+      throw e;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * READ transaction without modifying database and return extracted records.
    */
   async read<T = any>(
     cypher: string,
     params?: Record<string, any>,
     database?: string,
   ): Promise<T[]> {
-    const session = this.getReadSession(database);
+    const result = await this.readRaw(cypher, params, database);
+    return Neo4jService.extractRecords<T>(result.records);
+  }
+
+  /**
+   * WRITE transaction that modifies database and return raw query result.
+   */
+  async writeRaw(
+    cypher: string,
+    params?: Record<string, any>,
+    database?: string,
+  ): Promise<QueryResult> {
+    const session = this.getWriteSession(database);
 
     try {
-      const result = await session.readTransaction((tx) =>
-        tx.run(cypher, params),
-      );
-      return Neo4jService.extractRecords<T>(result.records);
+      return session.writeTransaction((tx) => tx.run(cypher, params));
     } catch (e) {
       throw e;
     } finally {
@@ -86,42 +115,32 @@ export class Neo4jService implements OnApplicationShutdown {
   }
 
   /**
-   * WRITE transaction that modifies database.
+   * WRITE transaction that modifies database and return extracted records.
    */
   async write<T = any>(
     cypher: string,
     params?: Record<string, any>,
     database?: string,
   ): Promise<T[]> {
-    const session = this.getWriteSession(database);
-
-    try {
-      const result = await session.writeTransaction((tx) =>
-        tx.run(cypher, params),
-      );
-      return Neo4jService.extractRecords<T>(result.records);
-    } catch (e) {
-      throw e;
-    } finally {
-      await session.close();
-    }
+    const result = await this.writeRaw(cypher, params, database);
+    return Neo4jService.extractRecords<T>(result.records);
   }
 
   /**
-   * Call multiple statements in one transaction.
+   * Call multiple statements in one transaction. Returns list of raw query results.
    */
-  async multipleStatements<T = any>(
+  async multipleStatementsRaw(
     statements: { statement: string; parameters: Record<string, any> }[],
-  ): Promise<T[][]> {
+  ): Promise<QueryResult[]> {
     const session = this.getWriteSession();
     const txc = session.beginTransaction();
 
     try {
-      const results: T[][] = [];
+      const results: QueryResult[] = [];
 
       for (const s of statements) {
         const result = await txc.run(s.statement, s.parameters);
-        results.push(Neo4jService.extractRecords<T>(result.records));
+        results.push(result);
       }
 
       await txc.commit();
@@ -132,6 +151,16 @@ export class Neo4jService implements OnApplicationShutdown {
     } finally {
       await session.close();
     }
+  }
+
+  /**
+   * Call multiple statements in one transaction. Returns list of extracted records.
+   */
+  async multipleStatements(
+    statements: { statement: string; parameters: Record<string, any> }[],
+  ): Promise<any[][]> {
+    const results = await this.multipleStatementsRaw(statements);
+    return results.map((result) => Neo4jService.extractRecords(result.records));
   }
 
   /**
@@ -231,7 +260,7 @@ export class Neo4jService implements OnApplicationShutdown {
    * @param arrayKey Property key of the array to check
    * @param checkKey Property key of first array element to check against `null`
    */
-  static removeEmptyArrays<T = any>(
+  static removeEmptyArrays<T>(
     data: T[],
     arrayKey: string,
     checkKey: string,
