@@ -1,74 +1,259 @@
 import { Injectable, Inject, OnApplicationShutdown } from '@nestjs/common';
-import neo4j, { Driver, Result, int, Transaction } from 'neo4j-driver'
+import neo4j, {
+  Driver,
+  Record as IRecord,
+  Session,
+  isDate,
+  isDateTime,
+  isDuration,
+  isInt,
+  isLocalDateTime,
+  isLocalTime,
+  isPoint,
+  isTime,
+} from 'neo4j-driver';
 import { Neo4jConfig } from './interfaces/neo4j-config.interface';
 import { NEO4J_OPTIONS, NEO4J_DRIVER } from './neo4j.constants';
-import TransactionImpl from 'neo4j-driver-core/lib/transaction'
 
 @Injectable()
-export class Neo4jService implements OnApplicationShutdown  {
+export class Neo4jService implements OnApplicationShutdown {
+  private readonly config: Neo4jConfig;
+  private readonly driver: Driver;
 
-    private readonly driver: Driver;
-    private readonly config: Neo4jConfig;
+  constructor(
+    @Inject(NEO4J_OPTIONS) config: Neo4jConfig,
+    @Inject(NEO4J_DRIVER) driver: Driver,
+  ) {
+    this.driver = driver;
+    this.config = config;
+  }
 
-    constructor(
-        @Inject(NEO4J_OPTIONS) config: Neo4jConfig,
-        @Inject(NEO4J_DRIVER) driver: Driver
+  /**
+   * Get Neo4j driver instance to access the full API of _neo4j-driver_.
+   */
+  getDriver(): Driver {
+    return this.driver;
+  }
+
+  getConfig(): Neo4jConfig {
+    return this.config;
+  }
+
+  onApplicationShutdown(): Promise<void> {
+    return this.driver.close();
+  }
+
+  /**
+   * Acquire a READ session.
+   */
+  getReadSession(database?: string): Session {
+    return this.driver.session({
+      database: database || this.config.database,
+      defaultAccessMode: neo4j.session.READ,
+    });
+  }
+
+  /**
+   * Acquire a WRITE session.
+   */
+  getWriteSession(database?: string): Session {
+    return this.driver.session({
+      database: database || this.config.database,
+      defaultAccessMode: neo4j.session.WRITE,
+    });
+  }
+
+  /**
+   * READ transaction without modifying database.
+   */
+  async read<T = any>(
+    cypher: string,
+    params?: Record<string, any>,
+    database?: string,
+  ): Promise<T[]> {
+    const session = this.getReadSession(database);
+
+    try {
+      const result = await session.readTransaction((tx) =>
+        tx.run(cypher, params),
+      );
+      return Neo4jService.extractRecords<T>(result.records);
+    } catch (e) {
+      throw e;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * WRITE transaction that modifies database.
+   */
+  async write<T = any>(
+    cypher: string,
+    params?: Record<string, any>,
+    database?: string,
+  ): Promise<T[]> {
+    const session = this.getWriteSession(database);
+
+    try {
+      const result = await session.writeTransaction((tx) =>
+        tx.run(cypher, params),
+      );
+      return Neo4jService.extractRecords<T>(result.records);
+    } catch (e) {
+      throw e;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Call multiple statements in one transaction.
+   */
+  async multipleStatements<T = any>(
+    statements: { statement: string; parameters: Record<string, any> }[],
+  ): Promise<T[][]> {
+    const session = this.getWriteSession();
+    const txc = session.beginTransaction();
+
+    try {
+      const results: T[][] = [];
+
+      for (const s of statements) {
+        const result = await txc.run(s.statement, s.parameters);
+        results.push(Neo4jService.extractRecords<T>(result.records));
+      }
+
+      await txc.commit();
+      return results;
+    } catch (e) {
+      await txc.rollback();
+      throw e;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * Extract and convert records returned by neo4j-driver.
+   */
+  static extractRecords<T = any>(data: IRecord[]): T[] {
+    if (!data) {
+      return [];
+    }
+
+    if (!Array.isArray(data)) {
+      return data;
+    }
+
+    return data.map((record) => {
+      const obj = {};
+
+      record.keys.forEach((key) => {
+        obj[key] = this.convertValues(record.get(key));
+      });
+
+      return obj as T;
+    });
+  }
+
+  private static convertValues(value) {
+    if (value === null) {
+      return value;
+    }
+
+    // neo4j integers
+    if (isInt(value)) {
+      if (neo4j.integer.inSafeRange(value)) {
+        return value.toNumber();
+      } else {
+        return value.toString();
+      }
+    }
+
+    // neo4j date, time, etc.
+    if (
+      isDate(value) ||
+      isDateTime(value) ||
+      isLocalTime(value) ||
+      isLocalDateTime(value) ||
+      isTime(value) ||
+      isDuration(value) ||
+      isPoint(value)
     ) {
-        this.driver = driver
-        this.config = config
+      return value.toString();
     }
 
-    getDriver(): Driver {
-        return this.driver;
+    // Spatial
+    if (isPoint(value)) {
+      switch (value.srid.toNumber()) {
+        case 4326:
+          return { longitude: value.y, latitude: value.x };
+
+        case 4979:
+          return { longitude: value.y, latitude: value.x, height: value.z };
+
+        default:
+          return this.convertValues({ x: value.x, y: value.y, z: value.z });
+      }
     }
 
-    getConfig(): Neo4jConfig {
-        return this.config;
+    // neo4j Node object
+    if (value instanceof neo4j.types.Node) {
+      value = value.properties;
     }
 
-    int(value: number) {
-        return int(value)
+    // recursive array
+    if (Array.isArray(value)) {
+      return value.map((v) => this.convertValues(v));
     }
 
-    beginTransaction(database?: string): Transaction {
-        const session = this.getWriteSession(database)
-
-        return session.beginTransaction()
+    // recursive object
+    if (typeof value === 'object') {
+      for (const key of Object.keys(value)) {
+        value[key] = this.convertValues(value[key]);
+      }
+      return value;
     }
 
-    getReadSession(database?: string) {
-        return this.driver.session({
-            database: database || this.config.database,
-            defaultAccessMode: neo4j.session.READ,
-        })
-    }
+    return value;
+  }
 
-    getWriteSession(database?: string) {
-        return this.driver.session({
-            database: database || this.config.database,
-            defaultAccessMode: neo4j.session.WRITE,
-        })
-    }
-
-    read(cypher: string, params?: Record<string, any>, databaseOrTransaction?: string | Transaction): Result {
-        if ( databaseOrTransaction instanceof TransactionImpl ) {
-            return (<Transaction> databaseOrTransaction).run(cypher, params)
+  /**
+   * Look for empty arrays returned by Neo4j and clean them, if there is `null` inside.
+   *
+   * Sometimes, if the cypher query contains `OPTIONAL MATCH node` in combination with
+   * `collect({key: node.value}) AS values`, the resulting array may be filled with one
+   * object with `null` values: `[{key: null}]`. This method reduces the array to `[]`
+   * by calling `removeEmptyArrays(data, 'values', 'key')`.
+   *
+   * @param data
+   * @param arrayKey Property key of the array to check
+   * @param checkKey Property key of first array element to check against `null`
+   */
+  static removeEmptyArrays<T = any>(
+    data: T[],
+    arrayKey: string,
+    checkKey: string,
+  ): T[] {
+    for (let i = 0, l = data.length; i < l; i++) {
+      if (
+        data[i][arrayKey] &&
+        Array.isArray(data[i][arrayKey]) &&
+        data[i][arrayKey][0]
+      ) {
+        if (data[i][arrayKey][0][checkKey] === null) {
+          data[i][arrayKey] = [];
         }
+      }
 
-        const session = this.getReadSession(<string> databaseOrTransaction)
-        return session.run(cypher, params)
-    }
-
-    write(cypher: string, params?: Record<string, any>,  databaseOrTransaction?: string | Transaction): Result {
-        if ( databaseOrTransaction instanceof TransactionImpl ) {
-            return (<Transaction> databaseOrTransaction).run(cypher, params)
+      for (const key in data[i]) {
+        if (data[i].hasOwnProperty(key) && Array.isArray(data[i][key])) {
+          this.removeEmptyArrays(data[i][key] as any, arrayKey, checkKey);
         }
-
-        const session = this.getWriteSession(<string> databaseOrTransaction)
-        return session.run(cypher, params)
+      }
     }
 
-    onApplicationShutdown() {
-        return this.driver.close()
-    }
+    return data;
+  }
 }
