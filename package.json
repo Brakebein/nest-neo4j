@@ -1,12 +1,11 @@
 {
   "name": "@brakebein/nest-neo4j",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Neo4j integration for NestJS",
   "main": "dist/index.js",
-  "types": "dist/index.d.js",
   "scripts": {
     "prebuild": "rimraf ./dist",
-    "build": "tsc",
+    "build": "tsc -p ./tsconfig.build.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
