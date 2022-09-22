@@ -1,6 +1,6 @@
 {
   "name": "@brakebein/nest-neo4j",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Neo4j integration for NestJS",
   "main": "dist/index.js",
   "scripts": {
