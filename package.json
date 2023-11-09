@@ -1,6 +1,6 @@
 {
   "name": "@brakebein/nest-neo4j",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Neo4j integration for NestJS",
   "main": "dist/index.js",
   "scripts": {
@@ -34,9 +34,9 @@
   },
   "homepage": "https://github.com/Brakebein/nest-neo4j#readme",
   "dependencies": {
-    "@nestjs/common": "^9.0.0",
-    "@nestjs/config": "^2.2.0",
-    "@nestjs/core": "^9.0.0",
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/config": "^3.0.0",
+    "@nestjs/core": "^10.0.0",
     "express": "^4.18.1",
     "neo4j-driver": "^4.4.7",
     "reflect-metadata": "^0.1.13",
