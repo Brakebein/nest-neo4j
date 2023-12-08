@@ -44,7 +44,7 @@ export const createDriver = async (config: Neo4jConfig): Promise<Driver> => {
   return lastValueFrom(
     driver$.pipe(
       timeout({
-        each: 60000,
+        each: config.verifyConnectionTimeout || 60000,
         with: () => {
           logger.error('Neo4j driver instantiation failed!');
           logger.error(reason);

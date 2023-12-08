@@ -41,6 +41,7 @@ import { AppService } from './app.service';
       options: {
         disableLosslessIntegers: true,
       },
+      verifyConnectionTimout: 60000,
     }),
   ],
   controllers: [AppController],
@@ -62,12 +63,12 @@ import { AppService } from './app.service';
   imports: [
     Neo4jModule.forRootAsync({
       useFactory: async (configService: ConfigService) => ({
-        scheme: configService.get('neo4j.scheme'),
-        host: configService.get('neo4j.host'),
-        port: configService.get('neo4j.port'),
-        username: configService.get('neo4j.username'),
-        password: configService.get('neo4j.password'),
-        database: configService.get('neo4j.database'),
+        scheme: configService.get('NEO4J_SCHEME'),
+        host: configService.get('NEO4J_HOST'),
+        port: configService.get('NEO4J_PORT'),
+        username: configService.get('NEO4J_USERNAME'),
+        password: configService.get('NEO4J_PASSWPRD'),
+        database: configService.get('NEO4J_DATABASE'),
       }),
       inject: [ConfigService],
     }),
@@ -80,6 +81,7 @@ export class AppModule {}
 
 If the Neo4j instance is unavailable, connection is not possible.
 Driver instantiation will be re-invoked a few times before throwing an error (useful in cases like server startup when node application is live earlier than the Neo4j database instance).
+Set `verifyConnectionTimeout` to increase the timeout before throwing an error.
 
 ## Querying Neo4j
 
