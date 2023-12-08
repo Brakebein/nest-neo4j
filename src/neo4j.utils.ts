@@ -29,7 +29,7 @@ export const createDriver = async (config: Neo4jConfig): Promise<Driver> => {
       );
 
       try {
-        const serverInfo = await driver.verifyConnectivity({
+        const serverInfo = await driver.getServerInfo({
           database: config.database,
         });
         logger.log('Neo4j Server: ' + printInfo(serverInfo));

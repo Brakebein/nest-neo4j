@@ -75,7 +75,7 @@ export class Neo4jService implements OnApplicationShutdown {
     const session = this.getReadSession(database);
 
     try {
-      return await session.readTransaction((tx) => tx.run(cypher, params));
+      return await session.executeRead((tx) => tx.run(cypher, params));
     } catch (e) {
       throw e;
     } finally {
@@ -106,7 +106,7 @@ export class Neo4jService implements OnApplicationShutdown {
     const session = this.getWriteSession(database);
 
     try {
-      return await session.writeTransaction((tx) => tx.run(cypher, params));
+      return await session.executeWrite((tx) => tx.run(cypher, params));
     } catch (e) {
       throw e;
     } finally {
